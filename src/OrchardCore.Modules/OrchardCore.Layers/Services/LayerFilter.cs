@@ -8,11 +8,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Caching.Memory;
 using OrchardCore.Admin;
 using OrchardCore.ContentManagement.Display;
-using OrchardCore.DisplayManagement;
 using OrchardCore.DisplayManagement.Layout;
 using OrchardCore.DisplayManagement.ModelBinding;
+using OrchardCore.DisplayManagement.Theming;
 using OrchardCore.Environment.Cache;
 using OrchardCore.Layers.Handlers;
+using OrchardCore.Layers.ViewModels;
 using OrchardCore.Mvc.Utilities;
 using OrchardCore.Scripting;
 
@@ -27,19 +28,21 @@ namespace OrchardCore.Layers.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly IMemoryCache _memoryCache;
         private readonly ISignal _signal;
-		private readonly ILayerService _layerService;
-		private readonly IShapeFactory _shapeFactory;
+        private readonly IThemeManager _themeManager;
+        private readonly IAdminThemeService _adminThemeService;
+        private readonly ILayerService _layerService;
 
 		public LayerFilter(
 			ILayerService layerService,
-			IShapeFactory shapeFactory,
             ILayoutAccessor layoutAccessor,
             IContentItemDisplayManager contentItemDisplayManager,
             IUpdateModelAccessor modelUpdaterAccessor,
             IScriptingManager scriptingManager,
             IServiceProvider serviceProvider,
             IMemoryCache memoryCache,
-            ISignal signal)
+            ISignal signal,
+            IThemeManager themeManager,
+            IAdminThemeService adminThemeService)
         {
 			_layerService = layerService;
 			_layoutAccessor = layoutAccessor;
@@ -49,7 +52,8 @@ namespace OrchardCore.Layers.Services
             _serviceProvider = serviceProvider;
             _memoryCache = memoryCache;
             _signal = signal;
-			_shapeFactory = shapeFactory;
+            _themeManager = themeManager;
+            _adminThemeService = adminThemeService;
         }
 
         public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
@@ -58,7 +62,17 @@ namespace OrchardCore.Layers.Services
 			if ((context.Result is ViewResult || context.Result is PageResult) &&
                 !AdminAttribute.IsApplied(context.HttpContext))
 			{
-				var widgets = await _memoryCache.GetOrCreateAsync("OrchardCore.Layers.LayerFilter:AllWidgets", entry =>
+                // Even if the Admin attribute is not applied we might be using the admin theme, for instance in Login views.
+                // In this case don't render Layers.
+                var selectedTheme = (await _themeManager.GetThemeAsync())?.Id;
+                var adminTheme = await _adminThemeService.GetAdminThemeNameAsync();
+                if (selectedTheme == adminTheme)
+                {
+                    await next.Invoke();
+                    return;
+                }
+
+                var widgets = await _memoryCache.GetOrCreateAsync("OrchardCore.Layers.LayerFilter:AllWidgets", entry =>
                 {
                     entry.AddExpirationToken(_signal.GetToken(LayerMetadataHandler.LayerChangeToken));
                     return _layerService.GetLayerWidgetsAsync(x => x.Published);
@@ -70,7 +84,7 @@ namespace OrchardCore.Layers.Services
 				var updater = _modelUpdaterAccessor.ModelUpdater;
 
 				var engine = _scriptingManager.GetScriptingEngine("js");
-				var scope = engine.CreateScope(_scriptingManager.GlobalMethodProviders.SelectMany(x => x.GetMethods()), _serviceProvider);
+				var scope = engine.CreateScope(_scriptingManager.GlobalMethodProviders.SelectMany(x => x.GetMethods()), _serviceProvider, null, null);
 
 				var layersCache = new Dictionary<string, bool>();
 
@@ -103,18 +117,23 @@ namespace OrchardCore.Layers.Services
 						continue;
 					}
 
-					IShape widgetContent = await _contentItemDisplayManager.BuildDisplayAsync(widget.ContentItem, updater);
+					var widgetContent = await _contentItemDisplayManager.BuildDisplayAsync(widget.ContentItem, updater);
 
 					widgetContent.Classes.Add("widget");
 					widgetContent.Classes.Add("widget-" + widget.ContentItem.ContentType.HtmlClassify());
 
-					var wrapper = await _shapeFactory.CreateAsync("Widget_Wrapper", new { Widget = widget.ContentItem, Content = widgetContent });
-					wrapper.Metadata.Alternates.Add("Widget_Wrapper__" + widget.ContentItem.ContentType);
+                    var wrapper = new WidgetWrapper
+                    {
+                        Widget = widget.ContentItem,
+                        Content = widgetContent
+                    };
+
+                    wrapper.Metadata.Alternates.Add("Widget_Wrapper__" + widget.ContentItem.ContentType);
+                    wrapper.Metadata.Alternates.Add("Widget_Wrapper__Zone__" + widget.Zone);
 
 					var contentZone = layout.Zones[widget.Zone];
 					contentZone.Add(wrapper);
 				}
-
 			}
 
 			await next.Invoke();

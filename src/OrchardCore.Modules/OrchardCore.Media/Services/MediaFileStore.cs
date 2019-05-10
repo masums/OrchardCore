@@ -32,9 +32,9 @@ namespace OrchardCore.Media.Services
             return _fileStore.GetDirectoryInfoAsync(path);
         }
 
-        public Task<IEnumerable<IFileStoreEntry>> GetDirectoryContentAsync(string path = null)
+        public Task<IEnumerable<IFileStoreEntry>> GetDirectoryContentAsync(string path = null, bool includeSubDirectories = false)
         {
-            return _fileStore.GetDirectoryContentAsync(path);
+            return _fileStore.GetDirectoryContentAsync(path, includeSubDirectories);
         }
 
         public Task<bool> TryCreateDirectoryAsync(string path)
@@ -85,7 +85,9 @@ namespace OrchardCore.Media.Services
         public string MapPublicUrlToPath(string publicUrl)
         {
             if (!publicUrl.StartsWith(_publicUrlBase, StringComparison.OrdinalIgnoreCase))
+            {
                 throw new ArgumentOutOfRangeException(nameof(publicUrl), "The specified URL is not inside the URL scope of the file store.");
+            }
 
             return publicUrl.Substring(_publicUrlBase.Length);
         }

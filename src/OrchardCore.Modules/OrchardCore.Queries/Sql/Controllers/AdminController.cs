@@ -38,7 +38,11 @@ namespace OrchardCore.Queries.Sql.Controllers
         public Task<IActionResult> Query(string query)
         {
             query = String.IsNullOrWhiteSpace(query) ? "" : System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(query));
-            return Query(new AdminQueryViewModel { DecodedQuery = query });
+            return Query(new AdminQueryViewModel
+            {
+                DecodedQuery = query,
+                FactoryName = _store.Configuration.ConnectionFactory.GetType().FullName
+            });
         }
 
         [HttpPost]
@@ -73,7 +77,7 @@ namespace OrchardCore.Queries.Sql.Controllers
                 templateContext.SetValue(parameter.Key, parameter.Value);
             }
 
-            var tokenizedQuery = await _liquidTemplateManager.RenderAsync(model.DecodedQuery, templateContext);
+            var tokenizedQuery = await _liquidTemplateManager.RenderAsync(model.DecodedQuery, NullEncoder.Default, templateContext);
 
             model.FactoryName = _store.Configuration.ConnectionFactory.GetType().FullName;
 

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using OrchardCore.Environment.Extensions.Features;
 
 namespace OrchardCore.Features.Models 
@@ -19,6 +19,11 @@ namespace OrchardCore.Features.Models
         public bool IsEnabled { get; set; }
 
         /// <summary>
+        /// Boolean value indicating if the feature is always enabled.
+        /// </summary>
+        public bool IsAlwaysEnabled { get; set; }
+
+        /// <summary>
         /// Boolean value indicating if the feature needs a data update / migration.
         /// </summary>
         public bool NeedsUpdate { get; set; }
@@ -37,5 +42,10 @@ namespace OrchardCore.Features.Models
         /// List of features that depend on this feature.
         /// </summary>
         public IEnumerable<IFeatureInfo> DependentFeatures { get; set; }
+
+        /// <summary>
+        /// List of features that this feature depends on.
+        /// </summary>
+        public IEnumerable<IFeatureInfo> FeatureDependencies { get; set; }
     }
 }
